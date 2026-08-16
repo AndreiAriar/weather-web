@@ -159,7 +159,8 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about the weather..."
                 disabled={isSending}
-                className="w-full rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none disabled:opacity-60"
+                style={{ fontSize: '16px' }}
+                className="w-full rounded-full border border-white/15 bg-white/10 px-4 py-2 text-base text-white placeholder:text-white/40 outline-none disabled:opacity-60 md:text-sm"
               />
               <button
                 type="button"
