@@ -66,7 +66,7 @@ export function SearchBar({ onSelect, onUseCurrentLocation, locating }: SearchBa
           }}
           onFocus={() => setOpen(true)}
           placeholder="Search for a city..."
-          className="w-full bg-transparent text-sm font-medium text-white placeholder:text-white/60 outline-none"
+          className="w-full bg-transparent text-base font-medium text-white placeholder:text-white/60 outline-none md:text-sm"
         />
         {query && (
           <button

@@ -29,28 +29,46 @@ export function LocationHero({ place, weather, photo, isCurrentLocation }: Locat
       {/* Fallback / loading backdrop, also doubles as a subtle base under the photo */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900" />
 
-      <AnimatePresence mode="sync">
-        {photo && (
-          <motion.img
-            key={photo}
-            src={photo}
-            alt={`View of ${place.name}`}
-            onLoad={() => setImageLoaded(true)}
-            initial={{ opacity: 0 }}
-            animate={
-              imageLoaded
-                ? { opacity: 1, scale: [1, 1.06, 1] }
-                : { opacity: 0 }
-            }
-            exit={{ opacity: 0 }}
-            transition={{
-              opacity: { duration: 0.8, ease: 'easeInOut' },
-              scale: { duration: 26, repeat: Infinity, ease: 'easeInOut' },
-            }}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        )}
-      </AnimatePresence>
+      {/* Perspective wrapper — gives the flip below real 3D depth instead of a flat rotation */}
+      <div className="absolute inset-0" style={{ perspective: 1400 }}>
+        <AnimatePresence mode="sync">
+          {photo && (
+            <motion.div
+              key={photo}
+              initial={{ rotateY: -32, opacity: 0, scale: 1.18 }}
+              animate={
+                imageLoaded
+                  ? { rotateY: 0, opacity: 1, scale: 1 }
+                  : { rotateY: -32, opacity: 0, scale: 1.18 }
+              }
+              exit={{ rotateY: 24, opacity: 0, scale: 1.1 }}
+              transition={{ duration: 1.15, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center' }}
+              className="absolute inset-0"
+            >
+              {/* The photo itself — flip handled by the wrapper above, this layer
+                  only handles the slow continuous zoom once settled in. */}
+              <motion.img
+                src={photo}
+                alt={`View of ${place.name}`}
+                onLoad={() => setImageLoaded(true)}
+                animate={imageLoaded ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+                transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
+                className="h-full w-full object-cover"
+              />
+
+              {/* Diagonal light sweep — plays once on entrance, like a premium product reveal */}
+              <motion.div
+                aria-hidden
+                initial={{ x: '-130%' }}
+                animate={imageLoaded ? { x: '160%' } : { x: '-130%' }}
+                transition={{ duration: 1, ease: 'easeInOut', delay: 0.25 }}
+                className="pointer-events-none absolute inset-y-0 w-1/3 skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Legibility scrim */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
