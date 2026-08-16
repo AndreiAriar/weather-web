@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { MapPin } from '@phosphor-icons/react'
 import { useLocalClock } from '../hooks/useLocalClock'
 import { formatFullDate, formatTime, formatWeekday } from '../lib/format'
@@ -25,21 +26,31 @@ export function LocationHero({ place, weather, photo, isCurrentLocation }: Locat
 
   return (
     <div className="relative h-72 w-full overflow-hidden rounded-3xl border border-white/15 shadow-2xl md:h-80">
-      {photo && (
-        <img
-          src={photo}
-          alt={`View of ${place.name}`}
-          onLoad={() => setImageLoaded(true)}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-      )}
-
       {/* Fallback / loading backdrop, also doubles as a subtle base under the photo */}
-      {!imageLoaded && (
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900" />
-      )}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900" />
+
+      <AnimatePresence mode="sync">
+        {photo && (
+          <motion.img
+            key={photo}
+            src={photo}
+            alt={`View of ${place.name}`}
+            onLoad={() => setImageLoaded(true)}
+            initial={{ opacity: 0 }}
+            animate={
+              imageLoaded
+                ? { opacity: 1, scale: [1, 1.06, 1] }
+                : { opacity: 0 }
+            }
+            exit={{ opacity: 0 }}
+            transition={{
+              opacity: { duration: 0.8, ease: 'easeInOut' },
+              scale: { duration: 26, repeat: Infinity, ease: 'easeInOut' },
+            }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+      </AnimatePresence>
 
       {/* Legibility scrim */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />

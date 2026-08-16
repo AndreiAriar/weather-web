@@ -117,18 +117,57 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherRes
 }
 
 /**
- * Look up a representative photo for a place via Wikipedia's public REST
- * summary endpoint (keyless, CORS-enabled). Falls back to null when the
- * place has no matching article or lead image.
+ * Look up a photo for a place via Wikipedia. We try a direct title lookup
+ * first (fast, one request — works well for search-selected places, since
+ * those names tend to come straight from clean geocoding data). If that
+ * comes back empty, we fall back to a geosearch by coordinates: reverse-
+ * geocoded names (e.g. from BigDataCloud for "current location") don't
+ * always match Wikipedia's exact article title, so searching by lat/lon
+ * instead of by name catches those cases too.
  */
 export async function fetchPlacePhoto(place: Place): Promise<string | null> {
-  const title = encodeURIComponent(`${place.name}`)
+  const direct = await fetchPhotoByTitle(place.name)
+  if (direct) return direct
+
+  return fetchPhotoByCoordinates(place.latitude, place.longitude)
+}
+
+async function fetchPhotoByTitle(title: string): Promise<string | null> {
   try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${title}`)
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
+    )
     if (!res.ok) return null
     const data = await res.json()
     if (data.type === 'disambiguation') return null
     return data.originalimage?.source ?? data.thumbnail?.source ?? null
+  } catch {
+    return null
+  }
+}
+
+async function fetchPhotoByCoordinates(lat: number, lon: number): Promise<string | null> {
+  try {
+    const geoUrl = new URL('https://en.wikipedia.org/w/api.php')
+    geoUrl.searchParams.set('action', 'query')
+    geoUrl.searchParams.set('list', 'geosearch')
+    geoUrl.searchParams.set('gscoord', `${lat}|${lon}`)
+    geoUrl.searchParams.set('gsradius', '10000')
+    geoUrl.searchParams.set('gslimit', '5')
+    geoUrl.searchParams.set('format', 'json')
+    geoUrl.searchParams.set('origin', '*')
+
+    const geoRes = await fetch(geoUrl)
+    if (!geoRes.ok) return null
+    const geoData = await geoRes.json()
+    const candidates: { title: string }[] = geoData.query?.geosearch ?? []
+
+    // Try each nearby article in order (closest first) until one has a usable photo.
+    for (const candidate of candidates) {
+      const photo = await fetchPhotoByTitle(candidate.title)
+      if (photo) return photo
+    }
+    return null
   } catch {
     return null
   }
