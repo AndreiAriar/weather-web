@@ -13,7 +13,70 @@ interface ChatRequestBody {
   context?: unknown
 }
 
-const GEMINI_MODEL = 'gemini-3.7-flash'
+// Tried in order. If one 503s (overloaded) or 404s (deprecated/unavailable),
+// we fall through to the next one before giving up.
+const GEMINI_MODELS = ['gemini-3.7-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite']
+
+type GeminiCallResult =
+  | {
+      ok: true
+      reply: string
+    }
+  | {
+      ok: false
+      status: number
+      errText: string
+    }
+
+async function callGemini(
+  model: string,
+  apiKey: string,
+  systemPrompt: string,
+  message: string
+): Promise<GeminiCallResult> {
+  const geminiRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: message }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 400,
+        },
+      }),
+    }
+  )
+
+  if (!geminiRes.ok) {
+    const errText = await geminiRes.text()
+    return { ok: false, status: geminiRes.status, errText }
+  }
+
+  const data = await geminiRes.json()
+  const reply: string =
+    data.candidates?.[0]?.content?.parts
+      ?.map((part: { text?: string }) => part.text ?? '')
+      .join('')
+      .trim() || "Sorry, I couldn't come up with an answer."
+
+  return { ok: true, reply }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -36,47 +99,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const contextBlock = context
     ? `\n\nCurrent app context (JSON — "weather" may be null if no city is loaded yet):\n${JSON.stringify(context)}`
     : ''
+  const fullSystemPrompt = SYSTEM_PROMPT + contextBlock
 
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: SYSTEM_PROMPT + contextBlock }],
-          },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: message }],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: 400,
-          },
-        }),
-      }
-    )
+    let lastError: { status: number; errText: string } | null = null
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      res.status(502).json({ error: `Gemini API error: ${errText}` })
-      return
+    for (const model of GEMINI_MODELS) {
+      // One retry per model on a 503 (transient high-demand), with a short
+      // delay, before moving on to the next model in the list.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = await callGemini(model, apiKey, fullSystemPrompt, message)
+
+        if (result.ok) {
+          res.status(200).json({ reply: result.reply })
+          return
+        }
+
+        lastError = { status: result.status, errText: result.errText }
+
+        if (result.status === 503 && attempt === 0) {
+          await sleep(800)
+          continue // retry same model once
+        }
+
+        break // move on to next model
+      }
     }
 
-    const data = await geminiRes.json()
-    const reply: string =
-      data.candidates?.[0]?.content?.parts
-        ?.map((part: { text?: string }) => part.text ?? '')
-        .join('')
-        .trim() || "Sorry, I couldn't come up with an answer."
-
-    res.status(200).json({ reply })
+    // Every model failed.
+    res.status(502).json({
+      error: `Gemini API error (all models unavailable): ${lastError?.errText ?? 'unknown error'}`,
+    })
   } catch {
     res.status(500).json({ error: 'Failed to reach Gemini API' })
   }
