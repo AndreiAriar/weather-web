@@ -25,6 +25,11 @@ export function useCurrentLocation(onResolved: (place: Place) => void): Location
         try {
           const place = await reverseGeocode(position.coords.latitude, position.coords.longitude)
           onResolved(place)
+        } catch {
+          // Reverse geocoding failed (network hiccup, API down, etc.) — treat it
+          // like we couldn't get a location, so the caller can fall back
+          // instead of being stuck "initializing" forever.
+          setPermissionDenied(true)
         } finally {
           setLocating(false)
         }

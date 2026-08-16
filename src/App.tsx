@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { SearchBar } from './components/SearchBar'
 import { LocationHero } from './components/LocationHero'
@@ -25,10 +25,43 @@ const FALLBACK_PLACE: Place = {
   timezone: 'Europe/London',
 }
 
+const PLACE_STORAGE_KEY = 'skylight:last-place'
+
+interface StoredPlace {
+  place: Place
+  isCurrentLocation: boolean
+}
+
+// Reads the last place the user viewed so a reload can restore it instead of
+// re-running geolocation (or falling back to London) and silently swapping
+// to a different place — which is what made the photo appear to "go missing".
+function loadStoredPlace(): StoredPlace | null {
+  try {
+    const raw = localStorage.getItem(PLACE_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredPlace>
+    if (
+      !parsed.place ||
+      typeof parsed.place.latitude !== 'number' ||
+      typeof parsed.place.longitude !== 'number'
+    ) {
+      return null
+    }
+    return { place: parsed.place, isCurrentLocation: Boolean(parsed.isCurrentLocation) }
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
-  const [place, setPlace] = useState<Place | null>(null)
-  const [isCurrentLocation, setIsCurrentLocation] = useState(false)
-  const [initializing, setInitializing] = useState(true)
+  // Read once, synchronously, so the very first render already has the last
+  // place the user was looking at (and can skip the loading skeleton + the
+  // geolocation round-trip that used to overwrite it on every reload).
+  const stored = useRef(loadStoredPlace()).current
+
+  const [place, setPlace] = useState<Place | null>(stored?.place ?? null)
+  const [isCurrentLocation, setIsCurrentLocation] = useState(stored?.isCurrentLocation ?? false)
+  const [initializing, setInitializing] = useState(!stored)
   const reduceMotion = useReducedMotion()
 
   const handleResolvedLocation = useCallback((resolved: Place) => {
@@ -40,8 +73,10 @@ export default function App() {
   const { locating, permissionDenied, locate } = useCurrentLocation(handleResolvedLocation)
   const { weather, photo, loading, error } = useWeatherData(place)
 
-  // On first mount, try to default to the user's current location.
+  // On first mount, try to default to the user's current location — but only
+  // if we don't already have a place restored from a previous visit.
   useEffect(() => {
+    if (stored) return
     if (!('geolocation' in navigator)) {
       setPlace(FALLBACK_PLACE)
       setInitializing(false)
@@ -59,6 +94,16 @@ export default function App() {
       setInitializing(false)
     }
   }, [permissionDenied, initializing])
+
+  // Keep the last-viewed place in sync so a reload picks up right where we left off.
+  useEffect(() => {
+    if (!place) return
+    try {
+      localStorage.setItem(PLACE_STORAGE_KEY, JSON.stringify({ place, isCurrentLocation }))
+    } catch {
+      // Storage can be unavailable (private browsing, quota, etc.) — safe to ignore.
+    }
+  }, [place, isCurrentLocation])
 
   function handleSelectPlace(selected: Place) {
     setPlace(selected)

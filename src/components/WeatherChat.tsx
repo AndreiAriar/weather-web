@@ -229,15 +229,21 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
         )}
       </AnimatePresence>
 
-      <motion.button
-        type="button"
-        onClick={() => (open ? handleClose() : setOpen(true))}
-        whileTap={{ scale: 0.92 }}
-        aria-label={open ? 'Close weather assistant' : 'Open weather assistant'}
-        className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl backdrop-blur-xl"
-      >
-        <img src={cloudLogo} alt="" className="h-9 w-9" />
-      </motion.button>
+      {/* Hidden while the panel is open: it's not needed (the header X already
+          closes the panel) and removing it from the flex stack frees up
+          vertical space so the panel doesn't get pushed further up on mobile,
+          especially once the keyboard is factored in. */}
+      {!open && (
+        <motion.button
+          type="button"
+          onClick={() => setOpen(true)}
+          whileTap={{ scale: 0.92 }}
+          aria-label="Open weather assistant"
+          className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl backdrop-blur-xl"
+        >
+          <img src={cloudLogo} alt="" className="h-9 w-9" />
+        </motion.button>
+      )}
     </div>
   )
 }
