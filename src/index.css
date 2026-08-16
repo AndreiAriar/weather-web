@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "@fontsource-variable/outfit";
+@import "@fontsource/jetbrains-mono/400.css";
+
+@theme {
+  --font-sans: "Outfit Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
