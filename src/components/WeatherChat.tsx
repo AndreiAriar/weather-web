@@ -24,6 +24,36 @@ interface WeatherChatProps {
   weather: WeatherResponse | null
 }
 
+// Tracks the iOS visual viewport (which shrinks when the keyboard opens) so the
+// chat widget can stay pinned to the *actually visible* bottom of the screen,
+// instead of `position: fixed`, which iOS Safari anchors to the layout viewport
+// and can leave stranded near the top when the keyboard is up.
+function useKeyboardOffset() {
+  const [offset, setOffset] = useState(0)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    function update() {
+      // Distance between the bottom of the layout viewport and the bottom of
+      // the visible (post-keyboard) viewport.
+      const keyboardGap = window.innerHeight - vv!.height - vv!.offsetTop
+      setOffset(Math.max(0, keyboardGap))
+    }
+
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
+
+  return offset
+}
+
 export function WeatherChat({ place, weather }: WeatherChatProps) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -31,6 +61,8 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INTRO_MESSAGE])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const keyboardOffset = useKeyboardOffset()
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -84,7 +116,10 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div
+      className="fixed right-5 z-50 flex flex-col items-end gap-3"
+      style={{ bottom: `calc(1.25rem + ${keyboardOffset}px)` }}
+    >
       <AnimatePresence>
         {open && (
           <motion.div
@@ -154,9 +189,17 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
 
             <div className="flex items-center gap-2 border-t border-white/10 p-3">
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  // Give iOS a beat to settle the keyboard/viewport, then make
+                  // sure the input is actually in view.
+                  setTimeout(() => {
+                    inputRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+                  }, 300)
+                }}
                 placeholder="Ask about the weather..."
                 disabled={isSending}
                 style={{ fontSize: '16px' }}
