@@ -13,7 +13,7 @@ interface ChatRequestBody {
   context?: unknown
 }
 
-const GEMINI_MODEL = 'gemini-flash-latest'
+const GEMINI_MODEL = 'gemini-3.7-flash'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
