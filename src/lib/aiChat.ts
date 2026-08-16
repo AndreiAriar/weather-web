@@ -24,7 +24,11 @@ export async function askSkyAssistant(message: string, ctx: AskContext): Promise
   })
 
   if (!res.ok) {
-    throw new Error(`Chat request failed (${res.status})`)
+    // Try to pull the real error message out of the response body so we can
+    // see what's actually going wrong instead of a generic status code.
+    const errBody = await res.json().catch(() => null)
+    const detail = errBody?.error || `status ${res.status}`
+    throw new Error(`Chat request failed: ${detail}`)
   }
 
   const data = await res.json()

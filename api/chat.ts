@@ -13,15 +13,17 @@ interface ChatRequestBody {
   context?: unknown
 }
 
+const GEMINI_MODEL = 'gemini-2.5-flash'
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
-    res.status(500).json({ error: 'Server is missing ANTHROPIC_API_KEY' })
+    res.status(500).json({ error: 'Server is missing GEMINI_API_KEY' })
     return
   }
 
@@ -36,37 +38,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : ''
 
   try {
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
-        system: SYSTEM_PROMPT + contextBlock,
-        messages: [{ role: 'user', content: message }],
-      }),
-    })
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: SYSTEM_PROMPT + contextBlock }],
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: message }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 400,
+          },
+        }),
+      }
+    )
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text()
-      res.status(502).json({ error: `Anthropic API error: ${errText}` })
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text()
+      res.status(502).json({ error: `Gemini API error: ${errText}` })
       return
     }
 
-    const data = await anthropicRes.json()
-    const reply =
-      data.content
-        ?.filter((block: { type: string }) => block.type === 'text')
-        .map((block: { text: string }) => block.text)
-        .join('\n')
+    const data = await geminiRes.json()
+    const reply: string =
+      data.candidates?.[0]?.content?.parts
+        ?.map((part: { text?: string }) => part.text ?? '')
+        .join('')
         .trim() || "Sorry, I couldn't come up with an answer."
 
     res.status(200).json({ reply })
   } catch {
-    res.status(500).json({ error: 'Failed to reach Anthropic API' })
+    res.status(500).json({ error: 'Failed to reach Gemini API' })
   }
 }

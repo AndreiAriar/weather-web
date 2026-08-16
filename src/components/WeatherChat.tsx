@@ -43,13 +43,16 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
     try {
       const reply = await askSkyAssistant(text, { place, weather })
       setMessages((prev) => [...prev, { id: `${Date.now()}-b`, role: 'bot', text: reply }])
-    } catch {
+    } catch (err) {
+      // TEMP DEBUG: showing the real error message in the chat bubble so we
+      // can see what's failing without digging through Vercel logs. Revert
+      // this back to the friendly fallback message once the bug is fixed.
       setMessages((prev) => [
         ...prev,
         {
           id: `${Date.now()}-b`,
           role: 'bot',
-          text: "Sorry, I couldn't reach the assistant just now. Try again in a moment.",
+          text: err instanceof Error ? `Debug: ${err.message}` : 'Unknown error occurred.',
         },
       ])
     } finally {
