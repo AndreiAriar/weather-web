@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { PaperPlaneRight, X } from '@phosphor-icons/react'
+import { PaperPlaneRight, Trash, X } from '@phosphor-icons/react'
 import { askSkyAssistant } from '../lib/aiChat'
 import type { Place, WeatherResponse } from '../types/weather'
 
@@ -13,6 +13,12 @@ interface ChatMessage {
   text: string
 }
 
+const INTRO_MESSAGE: ChatMessage = {
+  id: 'intro',
+  role: 'bot',
+  text: "Hi, I'm Sky — ask me anything about the weather!",
+}
+
 interface WeatherChatProps {
   place: Place | null
   weather: WeatherResponse | null
@@ -22,14 +28,22 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 'intro', role: 'bot', text: "Hi, I'm Sky — ask me anything about the weather!" },
-  ])
+  const [confirmingClear, setConfirmingClear] = useState(false)
+  const [messages, setMessages] = useState<ChatMessage[]>([INTRO_MESSAGE])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, open, isSending])
+
+  function handleClearChat() {
+    if (!confirmingClear) {
+      setConfirmingClear(true)
+      return
+    }
+    setMessages([INTRO_MESSAGE])
+    setConfirmingClear(false)
+  }
 
   async function send() {
     const text = input.trim()
@@ -64,6 +78,11 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
     }
   }
 
+  function handleClose() {
+    setOpen(false)
+    setConfirmingClear(false)
+  }
+
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
       <AnimatePresence>
@@ -76,14 +95,30 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
             className="flex h-[28rem] w-80 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-900/70 shadow-2xl backdrop-blur-2xl"
           >
             <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-              <img src={cloudLogo} alt="Sky Assistant" className="h-8 w-8 rounded-full" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800">
+                <img src={cloudLogo} alt="Sky Assistant" className="h-5 w-5" />
+              </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-white">Sky Assistant</p>
                 <p className="text-[11px] text-white/50">Ask me about the weather</p>
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={handleClearChat}
+                onBlur={() => setConfirmingClear(false)}
+                aria-label={confirmingClear ? 'Confirm delete conversation' : 'Delete conversation'}
+                title={confirmingClear ? 'Click again to confirm' : 'Delete conversation'}
+                className={`rounded-full p-1 transition ${
+                  confirmingClear
+                    ? 'bg-red-500/80 text-white hover:bg-red-500'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Trash size={16} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
                 aria-label="Close chat"
                 className="rounded-full p-1 text-white/60 transition hover:bg-white/10 hover:text-white"
               >
@@ -152,12 +187,12 @@ export function WeatherChat({ place, weather }: WeatherChatProps) {
 
       <motion.button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? handleClose() : setOpen(true))}
         whileTap={{ scale: 0.92 }}
         aria-label={open ? 'Close weather assistant' : 'Open weather assistant'}
-        className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/95 shadow-xl backdrop-blur-xl"
+        className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl backdrop-blur-xl"
       >
-        <img src={cloudLogo} alt="" className="h-10 w-10" />
+        <img src={cloudLogo} alt="" className="h-9 w-9" />
       </motion.button>
     </div>
   )
